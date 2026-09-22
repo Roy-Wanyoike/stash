@@ -608,7 +608,10 @@ input[type="range"].blue-slider {
   }
 
   &.organized {
-    color: #664c3f;
+    // Solid white for a high-contrast active state so the "organized" flag is
+    // instantly readable at a glance, including for users with colour vision
+    // deficiencies. See https://github.com/stashapp/stash/issues/7160.
+    color: #ffffff;
   }
 }
 
