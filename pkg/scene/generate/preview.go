@@ -100,6 +100,21 @@ func (g *Generator) previewVideo(input string, videoDuration float64, options Pr
 		// a list of tmp files used during the preview generation
 		var tmpFiles []string
 
+		// #7229 - concatFiles tracks only chunks that produced valid
+		// output and is used to build the concat list. ffmpeg can exit
+		// successfully but write a 0-byte file when the video stream
+		// has a non-zero start offset (segment at t=0 but the video
+		// starts at t>0) or when the segment lands at the very end of
+		// the file beyond the effective video length. The concat
+		// demuxer decides the output stream layout from the first
+		// entry of the list, so an empty first chunk makes it abort
+		// with "Output file does not contain any stream" and the
+		// entire preview fails even though the remaining segments were
+		// encoded correctly. Excluding empty chunks from the concat
+		// list lets the preview build from the remaining valid
+		// segments.
+		var concatFiles []string
+
 		// remove tmpFiles when done
 		defer func() { removeFiles(tmpFiles) }()
 
@@ -119,14 +134,15 @@ func (g *Generator) previewVideo(input string, videoDuration float64, options Pr
 				return fmt.Errorf("generating video preview chunk file: %w", err)
 			}
 
-			tmpFiles = append(tmpFiles, chunkFile.Name())
+			chunkPath := chunkFile.Name()
+			tmpFiles = append(tmpFiles, chunkPath)
 
 			time := offset + (float64(i) * stepSize)
 
 			chunkOptions := previewChunkOptions{
 				StartTime:  time,
 				Duration:   segmentDuration,
-				OutputPath: chunkFile.Name(),
+				OutputPath: chunkPath,
 				Audio:      options.Audio,
 				Preset:     options.Preset,
 			}
@@ -134,10 +150,28 @@ func (g *Generator) previewVideo(input string, videoDuration float64, options Pr
 			if err := g.previewVideoChunk(lockCtx, input, chunkOptions, fallback, useVsync2); err != nil {
 				return err
 			}
+
+			// #7229 - skip chunks that ffmpeg wrote as 0 bytes (no
+			// video stream content) so they are not fed to the concat
+			// demuxer, which would otherwise abort the entire preview.
+			if fi, statErr := os.Stat(chunkPath); statErr != nil || fi.Size() == 0 {
+				logger.Warnf("[generator] preview chunk at %fs produced no output, skipping", time)
+				continue
+			}
+
+			concatFiles = append(concatFiles, chunkPath)
 		}
 
-		// generate concat file based on generated video chunks
-		concatFilePath, err := g.generateConcatFile(tmpFiles)
+		// #7229 - bail out cleanly if every chunk was skipped
+		// (otherwise the concat demuxer would receive an empty list
+		// and abort with the same "Output file does not contain any
+		// stream" error)
+		if len(concatFiles) == 0 {
+			return fmt.Errorf("all %d preview chunks produced no output; cannot build preview (the video stream may have a non-zero start offset)", options.Segments)
+		}
+
+		// generate concat file based on generated non-empty video chunks
+		concatFilePath, err := g.generateConcatFile(concatFiles)
 		if concatFilePath != "" {
 			tmpFiles = append(tmpFiles, concatFilePath)
 		}
