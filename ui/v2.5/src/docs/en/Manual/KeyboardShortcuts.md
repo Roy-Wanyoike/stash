@@ -119,7 +119,9 @@
 
 | Keyboard sequence | Action |
 |-------------------|--------|
+| `a` | Details tab |
 | `e` | Edit tab |
+| `i` | File info tab |
 | `o` | Increment O-Counter |
 | Ratings ||
 | `r {1-5}` | Set rating (stars) |
@@ -133,6 +135,23 @@
 |-------------------|--------|
 | `s s` | Save Scene |
 | `d d` | Delete Scene |
+
+## Gallery page shortcuts
+
+| Keyboard sequence | Action |
+|-------------------|--------|
+| `a` | Details tab |
+| `c` | Chapters tab |
+| `e` | Edit tab |
+| `i` | File info tab |
+| `,` | Hide/Show sidebar |
+
+### Gallery edit tab shortcuts
+
+| Keyboard sequence | Action |
+|-------------------|--------|
+| `s s` | Save Gallery |
+| `d d` | Delete Gallery |
 
 ## Lightbox shortcuts
 

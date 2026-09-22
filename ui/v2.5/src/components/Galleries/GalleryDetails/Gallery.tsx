@@ -388,14 +388,16 @@ export const GalleryPage: React.FC<IProps> = ({ gallery, add }) => {
     Mousetrap.bind("a", () => setActiveTabKey("gallery-details-panel"));
     Mousetrap.bind("c", () => setActiveTabKey("gallery-chapter-panel"));
     Mousetrap.bind("e", () => setActiveTabKey("gallery-edit-panel"));
-    Mousetrap.bind("f", () => setActiveTabKey("gallery-file-info-panel"));
+    // Use `i` for File Info to match the Scene detail page shortcut and to
+    // avoid colliding with the query/list `f` shortcut (Add Filter dialog).
+    Mousetrap.bind("i", () => setActiveTabKey("gallery-file-info-panel"));
     Mousetrap.bind(",", () => setCollapsed(!collapsed));
 
     return () => {
       Mousetrap.unbind("a");
       Mousetrap.unbind("c");
       Mousetrap.unbind("e");
-      Mousetrap.unbind("f");
+      Mousetrap.unbind("i");
       Mousetrap.unbind(",");
     };
   });

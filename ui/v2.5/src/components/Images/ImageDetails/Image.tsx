@@ -287,7 +287,9 @@ const ImagePage: React.FC<IProps> = ({ image }) => {
   useEffect(() => {
     Mousetrap.bind("a", () => setActiveTabKey("image-details-panel"));
     Mousetrap.bind("e", () => setActiveTabKey("image-edit-panel"));
-    Mousetrap.bind("f", () => setActiveTabKey("image-file-info-panel"));
+    // Use `i` for File Info to match the Scene detail page shortcut and to
+    // avoid colliding with the query/list `f` shortcut (Add Filter dialog).
+    Mousetrap.bind("i", () => setActiveTabKey("image-file-info-panel"));
     Mousetrap.bind("o", () => {
       onIncrementClick();
     });
@@ -295,7 +297,7 @@ const ImagePage: React.FC<IProps> = ({ image }) => {
     return () => {
       Mousetrap.unbind("a");
       Mousetrap.unbind("e");
-      Mousetrap.unbind("f");
+      Mousetrap.unbind("i");
       Mousetrap.unbind("o");
     };
   });
