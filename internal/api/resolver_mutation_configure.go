@@ -353,7 +353,9 @@ func (r *mutationResolver) ConfigureGeneral(ctx context.Context, input ConfigGen
 			} else {
 				logger.Info("Password changed")
 			}
-			c.SetPassword(*input.Password)
+			if err := c.SetPassword(*input.Password); err != nil {
+				return makeConfigGeneralResult(), fmt.Errorf("error setting password: %v", err)
+			}
 		}
 	}
 

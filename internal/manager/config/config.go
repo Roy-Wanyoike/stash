@@ -527,13 +527,20 @@ func (i *Config) setDefault(key string, value interface{}) {
 	}
 }
 
-func (i *Config) SetPassword(value string) {
+func (i *Config) SetPassword(value string) error {
 	// if blank, don't bother hashing; we want it to be blank
 	if value == "" {
 		i.SetString(Password, "")
-	} else {
-		i.SetString(Password, hashPassword(value))
+		return nil
 	}
+
+	hash, err := hashPassword(value)
+	if err != nil {
+		return err
+	}
+
+	i.SetString(Password, hash)
+	return nil
 }
 
 func (i *Config) Write() error {
@@ -1220,10 +1227,24 @@ func (i *Config) HasCredentials() bool {
 	return username != "" && pwHash != ""
 }
 
-func hashPassword(password string) string {
-	hash, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
+// maxPasswordBytes is the bcrypt-imposed maximum password length in bytes.
+// Passwords longer than this are silently truncated (or, in some bcrypt
+// builds, cause GenerateFromPassword to return an error). We reject them
+// up front so the user gets a clear error instead of a silently empty hash.
+// See https://github.com/stashapp/stash/issues/7135.
+const maxPasswordBytes = 72
 
-	return string(hash)
+func hashPassword(password string) (string, error) {
+	if len(password) > maxPasswordBytes {
+		return "", fmt.Errorf("password exceeds the %d-byte limit imposed by bcrypt", maxPasswordBytes)
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
+	if err != nil {
+		return "", fmt.Errorf("error hashing password: %w", err)
+	}
+
+	return string(hash), nil
 }
 
 func (i *Config) ValidateCredentials(username string, password string) bool {

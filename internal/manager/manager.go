@@ -294,7 +294,9 @@ func (s *Manager) Setup(ctx context.Context, input SetupInput) error {
 
 	if input.InitialUsername != "" && input.InitialPassword != "" {
 		cfg.SetString(config.Username, input.InitialUsername)
-		cfg.SetPassword(input.InitialPassword)
+		if err := cfg.SetPassword(input.InitialPassword); err != nil {
+			return fmt.Errorf("error setting initial password: %v", err)
+		}
 	}
 
 	if err := cfg.Write(); err != nil {

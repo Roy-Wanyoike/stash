@@ -54,6 +54,10 @@ const AuthenticationInput: React.FC<IAuthenticationInput> = ({
         <Form.Control
           className="text-input"
           type="password"
+          // bcrypt imposes a 72-byte maximum on passwords. Enforce it here
+          // so the user cannot type more than 72 characters; the backend
+          // also validates the byte length. See #7135.
+          maxLength={72}
           value={password ?? ""}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
             set({ password: e.currentTarget.value })
