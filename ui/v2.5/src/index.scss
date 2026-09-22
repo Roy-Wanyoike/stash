@@ -627,6 +627,29 @@ div.react-select__control {
     color: $text-color;
   }
 
+  // Fix #7139: allow right-click "Paste" in Tags/Performers/Groups multi-edit
+  // boxes. react-select renders the internal <input> inside a
+  // `display: inline-grid` container with `grid-template-columns: 0
+  // min-content`, which keeps the actual <input> only as wide as the text
+  // typed so far (or ~2px when empty). Right-clicking in the surrounding
+  // empty area of a multi-select control box lands on the surrounding
+  // control/value-container <div> rather than the <input>, so Chrome does
+  // not surface the native "Paste" context menu item even though Ctrl+V
+  // still works. Stretch the input container vertically and let the input
+  // column actually fill the available width so the input covers the whole
+  // control area and right-clicks land on it.
+  .react-select__input-container {
+    align-self: stretch;
+    grid-template-columns: 0 minmax(0, 1fr);
+    padding-bottom: 0;
+    padding-top: 0;
+  }
+
+  .react-select__input {
+    height: 100%;
+    min-height: 1.5em;
+  }
+
   .react-select__multi-value {
     background-color: $muted-gray;
     color: $text-color;
