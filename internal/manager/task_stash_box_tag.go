@@ -368,6 +368,16 @@ func (t *stashBoxBatchStudioTagTask) findStashBoxStudio(ctx context.Context) (*m
 
 func (t *stashBoxBatchStudioTagTask) processMatchedStudio(ctx context.Context, s *models.ScrapedStudio, excluded map[string]bool) {
 	if t.studio != nil {
+		// The matcher (match.ScrapedStudioHierarchy) does not guarantee that
+		// StoredID is set: it is left nil when the scraped result cannot be
+		// mapped back to a local studio. Dereferencing *s.StoredID below
+		// panicked the whole batch job in that case, so skip this studio and
+		// let the rest of the batch continue.
+		if s.StoredID == nil {
+			logger.Infof("Skipping studio %s: could not match scraped result to a local studio", s.Name)
+			return
+		}
+
 		storedID, _ := strconv.Atoi(*s.StoredID)
 
 		if s.Parent != nil && t.createParent {
