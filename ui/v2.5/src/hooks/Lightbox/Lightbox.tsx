@@ -84,6 +84,12 @@ const MIN_VALID_INTERVAL_SECONDS = 1;
 const MIN_ZOOM = 0.1;
 const SCROLL_ZOOM_TIMEOUT = 250;
 const ZOOM_NONE_EPSILON = 0.015;
+// #7148 - click vs. drag detection for the dismiss-on-click handler. Kept in
+// sync with LightboxImage.tsx's CLICK_MOVE_THRESHOLD so a pan that overshoots
+// the image boundary (and therefore lands its mouseup on the
+// Lightbox-carousel-image container, an ancestor of the <img> the mousedown
+// started on) is treated as a pan rather than a dismiss click.
+const CLICK_MOVE_THRESHOLD = 8;
 
 interface IProps {
   images: ILightboxImage[];
@@ -457,7 +463,33 @@ export const LightboxComponent: React.FC<IProps> = ({
     [hide]
   );
 
+  // #7148 - records the page coordinates of the most recent mousedown inside
+  // the lightbox so handleClose can tell a real dismiss click (no movement)
+  // from a pan that overshoots the image boundary (substantial movement).
+  // Always updated on mousedown before any click fires, so it never goes
+  // stale between gestures.
+  const mouseDownRef = useRef<{ x: number; y: number } | null>(null);
+
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    mouseDownRef.current = { x: e.pageX, y: e.pageY };
+  };
+
   const handleClose = (e: React.MouseEvent<HTMLDivElement>) => {
+    // #7148 - a drag that overshoots the <img> lands its mouseup on the
+    // Lightbox-carousel-image container (an ancestor of the <img> the
+    // mousedown started on), so the click target is the container and the
+    // className check below would otherwise dismiss the lightbox. Treat any
+    // click with substantial movement from the mousedown as a pan, not a
+    // dismiss.
+    if (mouseDownRef.current) {
+      const dx = e.pageX - mouseDownRef.current.x;
+      const dy = e.pageY - mouseDownRef.current.y;
+      if (Math.hypot(dx, dy) > CLICK_MOVE_THRESHOLD) {
+        mouseDownRef.current = null;
+        return;
+      }
+    }
+
     const { className } = e.target as Element;
     if (className?.includes?.(CLASSNAME_IMAGE)) close();
   };
@@ -1149,6 +1181,7 @@ export const LightboxComponent: React.FC<IProps> = ({
       role="presentation"
       ref={containerRef}
       onClick={handleClose}
+      onMouseDown={handleMouseDown}
     >
       {renderBody()}
       {deleteTarget?.id !== undefined && (

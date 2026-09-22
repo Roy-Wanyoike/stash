@@ -8,6 +8,13 @@ const SCROLL_GROUP_EXIT_THRESHOLD = 4;
 const SCROLL_INFINITE_THRESHOLD = 10;
 const SCROLL_PAN_STEP = 75;
 const SCROLL_PAN_FACTOR = 2;
+// #7147 - click vs. pan detection. The 200ms duration matches the previous
+// hard-coded value; the 8px distance absorbs sub-pixel jitter and small
+// unintentional movements so a fast pan no longer falls through to the
+// left/right navigation branches below. Also duplicated in Lightbox.tsx for
+// the dismiss-on-click guard (#7148) so the two checks stay in sync.
+const CLICK_MAX_DURATION = 200;
+const CLICK_MOVE_THRESHOLD = 8;
 const CLASSNAME = "Lightbox";
 const CLASSNAME_CAROUSEL = `${CLASSNAME}-carousel`;
 const CLASSNAME_IMAGE = `${CLASSNAME_CAROUSEL}-image`;
@@ -443,19 +450,26 @@ export const LightboxImage: React.FC<IProps> = ({
   function onImageMouseUp(ev: React.MouseEvent) {
     if (ev.button !== 0) return;
 
+    const downEvent = mouseDownEvent.current;
     if (
-      !mouseDownEvent.current ||
-      ev.timeStamp - mouseDownEvent.current.timeStamp > 200
+      !downEvent ||
+      ev.timeStamp - downEvent.timeStamp > CLICK_MAX_DURATION
     ) {
       // not a click - ignore
       return;
     }
 
-    // must be a click
-    if (
-      ev.pageX !== startPoints.current[0] ||
-      ev.pageY !== startPoints.current[1]
-    ) {
+    // #7147 - must be a click. Compare against the mousedown position
+    // (mouseDownEvent.current), NOT startPoints.current: the pan handler
+    // (onImageMouseOver) reassigns startPoints.current on every mousemove
+    // for its frame-to-frame delta, so by mouseup it holds the last
+    // mousemove coordinates (essentially the mouseup pixel), the
+    // strict-inequality check passes, and any pan finished within
+    // CLICK_MAX_DURATION navigates. A distance threshold replaces the
+    // strict inequality to absorb jitter and small unintentional movements.
+    const dx = ev.pageX - downEvent.pageX;
+    const dy = ev.pageY - downEvent.pageY;
+    if (Math.hypot(dx, dy) > CLICK_MOVE_THRESHOLD) {
       return;
     }
 
