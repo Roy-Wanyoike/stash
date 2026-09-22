@@ -186,13 +186,20 @@ func (s *Service) deleteFiles(ctx context.Context, i *models.Image, fileDeleter 
 			continue
 		}
 
-		// don't delete files in zip archives
+		// #7106 - files inside a zip archive cannot be deleted individually;
+		// the entry must be removed from the zip file directly. Surface a
+		// clear error rather than silently skipping so the user is aware that
+		// the delete did not happen (previously the image DB record was
+		// removed while the zip entry was left untouched, causing the image
+		// to reappear on the next scan).
 		const deleteFile = true
 		if f.Base().ZipFileID == nil {
 			logger.Info("Deleting image file: ", f.Base().Path)
 			if err := file.Destroy(ctx, s.File, f, fileDeleter.Deleter, deleteFile); err != nil {
 				return err
 			}
+		} else {
+			return fmt.Errorf("cannot delete image %q: file %q is inside a zip archive; remove the entry from the zip file directly", i.Path, f.Base().Path)
 		}
 	}
 
@@ -218,13 +225,17 @@ func (s *Service) destroyFileEntries(ctx context.Context, i *models.Image) error
 			continue
 		}
 
-		// don't destroy files in zip archives
+		// #7106 - surface a clear error for files inside a zip archive instead
+		// of silently skipping the file-entry destruction (see deleteFiles for
+		// the full rationale).
 		if f.Base().ZipFileID == nil {
 			const deleteFile = false
 			logger.Info("Destroying image file entry: ", f.Base().Path)
 			if err := file.Destroy(ctx, s.File, f, nil, deleteFile); err != nil {
 				return err
 			}
+		} else {
+			return fmt.Errorf("cannot destroy file entry for image %q: file %q is inside a zip archive; remove the entry from the zip file directly", i.Path, f.Base().Path)
 		}
 	}
 
