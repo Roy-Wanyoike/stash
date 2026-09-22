@@ -70,6 +70,37 @@ func stringCriterionHandler(c *models.StringCriterionInput, column string) crite
 	}
 }
 
+// nullableStringCriterionHandler is like stringCriterionHandler, but for the
+// Excludes and NotEquals modifiers it also includes rows where the column is
+// NULL.
+//
+// The standard handler produces a bare `column NOT LIKE ?` clause, which in
+// SQL evaluates to NULL (not true) when the column is NULL, so rows where the
+// column is NULL are silently excluded from "excludes X" / "is not X" results.
+// Used for nullable string columns such as performer disambiguation, where
+// users expect "excludes X" / "is not X" to also return rows that have no
+// value at all (see issue #7133).
+func nullableStringCriterionHandler(c *models.StringCriterionInput, column string) criterionHandlerFunc {
+	return func(ctx context.Context, f *filterBuilder) {
+		if c != nil {
+			if modifier := c.Modifier; c.Modifier.IsValid() {
+				switch modifier {
+				case models.CriterionModifierExcludes:
+					inner := getStringSearchClause([]string{column}, c.Value, true)
+					f.whereClauses = append(f.whereClauses, sqlClause{
+						sql:  "(" + column + " IS NULL OR " + inner.sql + ")",
+						args: inner.args,
+					})
+				case models.CriterionModifierNotEquals:
+					f.addWhere(fmt.Sprintf("(%s IS NULL OR %[1]s NOT LIKE ?)", column), c.Value)
+				default:
+					stringCriterionHandler(c, column)(ctx, f)
+				}
+			}
+		}
+	}
+}
+
 func stringNoTrimCriterionHandler(c *models.StringCriterionInput, column string) criterionHandlerFunc {
 	return func(ctx context.Context, f *filterBuilder) {
 		if c != nil {
