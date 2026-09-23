@@ -389,11 +389,26 @@ func getGeneratePreviewOptions(optionsInput GeneratePreviewOptionsInput) generat
 		Audio:           config.GetPreviewAudio(),
 	}
 
-	if optionsInput.PreviewSegments != nil {
+	// #7173 - only honour a positive override; ignore zero/negative.
+	// GenerateDialog.tsx and LibraryTasks.tsx initialise previewOptions with
+	// previewSegments: 0 / previewSegmentDuration: 0 as a sentinel for "no
+	// value configured", and the merge with general.* uses ?? which keeps
+	// 0 as a real value (0 is not nullish in JS). The resulting non-nil
+	// *int(0) / *float64(0) override made options.Segments / SegmentDuration
+	// resolve to 0; the per-segment loop in pkg/scene/generate/preview.go's
+	// previewVideo was a no-op; generateConcatFile wrote an empty concat
+	// list; and the concat demuxer aborted with "Invalid data found when
+	// processing input" / exit 183 - taking down the entire preview even
+	// though ffmpeg, the source files, and disk were all fine. Falling back
+	// to the top-level config (already initialised to 12 segments / 0.75s
+	// by setDefaultValues in config.go) restores the expected behaviour:
+	// preview generation using the default global settings works exactly as
+	// it does when the same values are passed explicitly.
+	if optionsInput.PreviewSegments != nil && *optionsInput.PreviewSegments > 0 {
 		ret.Segments = *optionsInput.PreviewSegments
 	}
 
-	if optionsInput.PreviewSegmentDuration != nil {
+	if optionsInput.PreviewSegmentDuration != nil && *optionsInput.PreviewSegmentDuration > 0 {
 		ret.SegmentDuration = *optionsInput.PreviewSegmentDuration
 	}
 
