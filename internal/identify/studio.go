@@ -2,6 +2,7 @@ package identify
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 
 	"github.com/stashapp/stash/pkg/logger"
@@ -11,6 +12,25 @@ import (
 
 func createMissingStudio(ctx context.Context, endpoint string, w models.StudioReaderWriter, s *models.ScrapedStudio) (*int, error) {
 	var err error
+
+	if s.Parent != nil && s.Parent.StoredID == nil {
+		// #7212: The match logic in pkg/match only runs for stash-box
+		// sources and even then skips ambiguous matches, so a scraped
+		// parent studio can arrive here with StoredID=nil even when a
+		// studio with the same name already exists. Creating a new row
+		// in that case violates the UNIQUE constraint on studios(name).
+		// If a match is found, set StoredID so the update branch below
+		// refreshes its metadata instead of attempting a duplicate
+		// INSERT.
+		existingParent, err := w.FindByName(ctx, s.Parent.Name, true)
+		if err != nil {
+			return nil, fmt.Errorf("error looking up existing parent studio by name: %w", err)
+		}
+		if existingParent != nil {
+			storedId := strconv.Itoa(existingParent.ID)
+			s.Parent.StoredID = &storedId
+		}
+	}
 
 	if s.Parent != nil {
 		if s.Parent.StoredID == nil {
@@ -67,6 +87,17 @@ func createMissingStudio(ctx context.Context, endpoint string, w models.StudioRe
 				}
 			}
 		}
+	}
+
+	// #7212: Same lookup for the studio itself. See the rationale above
+	// for the parent studio.
+	existing, err := w.FindByName(ctx, s.Name, true)
+	if err != nil {
+		return nil, fmt.Errorf("error looking up existing studio by name: %w", err)
+	}
+	if existing != nil {
+		logger.Debugf("Studio %q already exists with id %d, reusing", s.Name, existing.ID)
+		return &existing.ID, nil
 	}
 
 	newStudio := s.ToStudio(endpoint, nil)

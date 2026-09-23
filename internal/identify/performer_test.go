@@ -24,6 +24,10 @@ func Test_getPerformerID(t *testing.T) {
 
 	db := mocks.NewDatabase()
 
+	// #7212: createMissingPerformer now looks the performer up by name
+	// first; default to no existing match so the create branch runs.
+	db.Performer.On("FindByNames", testCtx, mock.Anything, mock.Anything).Return(nil, nil)
+
 	db.Performer.On("Create", testCtx, mock.AnythingOfType("*models.CreatePerformerInput")).Run(func(args mock.Arguments) {
 		p := args.Get(1).(*models.CreatePerformerInput)
 		p.ID = validStoredID
@@ -150,12 +154,31 @@ func Test_createMissingPerformer(t *testing.T) {
 	remoteSiteID := "remoteSiteID"
 	validName := "validName"
 	invalidName := "invalidName"
+	existingName := "existingName"
+	existingDisambig := "existingDisambig"
 	performerID := 1
+	existingPerformerID := 42
 
 	db := mocks.NewDatabase()
 
+	// #7212: createMissingPerformer looks up the performer by name first.
+	// Default to no match so the create branch runs.
+	db.Performer.On("FindByNames", testCtx, mock.MatchedBy(func(names []string) bool {
+		return len(names) > 0 && names[0] == existingName
+	})).Return([]*models.Performer{{ID: existingPerformerID, Name: existingName}}, nil)
+	db.Performer.On("FindByNames", testCtx, mock.MatchedBy(func(names []string) bool {
+		return len(names) > 0 && names[0] != existingName
+	})).Return(nil, nil)
+
 	db.Performer.On("Create", testCtx, mock.MatchedBy(func(p *models.CreatePerformerInput) bool {
 		return p.Name == validName
+	})).Run(func(args mock.Arguments) {
+		p := args.Get(1).(*models.CreatePerformerInput)
+		p.ID = performerID
+	}).Return(nil)
+
+	db.Performer.On("Create", testCtx, mock.MatchedBy(func(p *models.CreatePerformerInput) bool {
+		return p.Name == existingName
 	})).Run(func(args mock.Arguments) {
 		p := args.Get(1).(*models.CreatePerformerInput)
 		p.ID = performerID
@@ -206,6 +229,38 @@ func Test_createMissingPerformer(t *testing.T) {
 				&models.ScrapedPerformer{
 					Name:         &validName,
 					RemoteSiteID: &remoteSiteID,
+				},
+			},
+			&performerID,
+			false,
+		},
+		{
+			// #7212: performer with the same name already exists in the
+			// database; reuse its ID instead of attempting a duplicate
+			// INSERT that would violate the UNIQUE constraint on
+			// performers(name) / performers(name, disambiguation).
+			"existing performer reused",
+			args{
+				emptyEndpoint,
+				&models.ScrapedPerformer{
+					Name: &existingName,
+				},
+			},
+			&existingPerformerID,
+			false,
+		},
+		{
+			// #7212: same name as an existing performer but a different
+			// disambiguation; the UNIQUE constraint on (name, disambiguation)
+			// would not conflict, but to keep the behaviour predictable we
+			// still create a fresh performer rather than reusing the
+			// existing one (whose disambiguation differs).
+			"same name different disambiguation creates new",
+			args{
+				emptyEndpoint,
+				&models.ScrapedPerformer{
+					Name:           &existingName,
+					Disambiguation: &existingDisambig,
 				},
 			},
 			&performerID,

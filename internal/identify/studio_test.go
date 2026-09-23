@@ -17,7 +17,9 @@ func Test_createMissingStudio(t *testing.T) {
 	remoteSiteID := "remoteSiteID"
 	validName := "validName"
 	invalidName := "invalidName"
+	existingName := "existingName"
 	createdID := 1
+	existingStudioID := 42
 
 	db := mocks.NewDatabase()
 
@@ -30,6 +32,15 @@ func Test_createMissingStudio(t *testing.T) {
 	db.Studio.On("Create", testCtx, mock.MatchedBy(func(p *models.CreateStudioInput) bool {
 		return p.Name == invalidName
 	})).Return(errors.New("error creating studio"))
+
+	// #7212: createMissingStudio now looks the studio up by name first;
+	// default to no existing match so the create branch runs.
+	db.Studio.On("FindByName", testCtx, mock.MatchedBy(func(name string) bool {
+		return name == existingName
+	}), mock.Anything).Return(&models.Studio{ID: existingStudioID, Name: existingName}, nil)
+	db.Studio.On("FindByName", testCtx, mock.MatchedBy(func(name string) bool {
+		return name != existingName
+	}), mock.Anything).Return(nil, nil)
 
 	db.Studio.On("UpdatePartial", testCtx, models.StudioPartial{
 		ID: createdID,
@@ -102,6 +113,21 @@ func Test_createMissingStudio(t *testing.T) {
 				},
 			},
 			&createdID,
+			false,
+		},
+		{
+			// #7212: studio with the same name already exists in the
+			// database; reuse its ID instead of attempting a duplicate
+			// INSERT that would violate the UNIQUE constraint on
+			// studios(name).
+			"existing studio reused",
+			args{
+				emptyEndpoint,
+				&models.ScrapedStudio{
+					Name: existingName,
+				},
+			},
+			&existingStudioID,
 			false,
 		},
 	}

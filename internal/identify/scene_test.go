@@ -31,6 +31,10 @@ func Test_sceneRelationships_studio(t *testing.T) {
 		s.ID = validStoredIDInt
 	}).Return(nil)
 
+	// #7212: createMissingStudio now looks the studio up by name first;
+	// default to no existing match so the create branch runs.
+	db.Studio.On("FindByName", testCtx, mock.Anything, mock.Anything).Return(nil, nil)
+
 	tr := sceneRelationships{
 		studioReaderWriter: db.Studio,
 		fieldOptions:       make(map[string]*FieldOptions),
