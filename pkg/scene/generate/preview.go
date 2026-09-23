@@ -185,6 +185,7 @@ func (g Generator) previewVideoChunk(lockCtx *fsutil.LockContext, fn string, opt
 		"-level", "4.2",
 		"-preset", options.Preset,
 		"-crf", "21",
+		"-movflags", "+faststart",
 		"-threads", "4",
 		"-strict", "-2",
 	)
@@ -242,6 +243,11 @@ func (g Generator) generateConcatFile(chunkFiles []string) (fn string, err error
 func (g Generator) previewVideoChunkCombine(lockCtx *fsutil.LockContext, concatFilePath string, outputPath string) error {
 	spliceOptions := transcoder.SpliceOptions{
 		OutputPath: outputPath,
+		// Move the moov atom to the front of the final MP4 so Firefox can
+		// start playback without first downloading the whole file or doing
+		// an extra byte-range seek to the end. Matches previewVideoChunk
+		// and marker_preview.go. See issue #7217.
+		VideoArgs: ffmpeg.Args{"-movflags", "+faststart"},
 	}
 
 	args := transcoder.Splice(concatFilePath, spliceOptions)
